@@ -100,6 +100,21 @@ def stereo_calibrate(
         print(f"[ZAPIS] Zapisano wyniki stereo do: {output_path}")
 
 
+def compute_baseline(T, obj_unit="mm"):
+    T = np.asarray(T).reshape(3,)
+    baseline_orig = np.linalg.norm(T)
+    if obj_unit == "mm":
+        baseline_m = baseline_orig / 1000.0
+
+    print(f"Baseline (orig unit = {obj_unit}): {baseline_orig:.6f} {obj_unit}")
+    print(f"Baseline (meters): {baseline_m:.6f} m")
+    # także składowa X (często dominująca)
+    print(f"T vector: {T}")
+    print(f"|T_x| = {abs(T[0]):.6f} {obj_unit}")
+
+    return baseline_orig, baseline_m
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Stereo kalibracja kamer z obrazów szachownicy.")
     parser.add_argument("-l", "--left", required=True, help="Folder ze zdjęciami z lewej kamery.")
@@ -110,11 +125,21 @@ def parse_args():
     parser.add_argument("-j", "--json", action="store_true", help="Zapisz wynik kalibracji do stereo_calibration.json.")
     parser.add_argument("--left_json", required=True, help="Plik JSON z kalibracją lewej kamery.")
     parser.add_argument("--right_json", required=True, help="Plik JSON z kalibracją prawej kamery.")
+    parser.add_argument("--compute_baseline", required=True, help="Plik JSON z kalibracją stereo kamery.")
+    
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
+
+    if args.compute_baseline:
+        with open(args.compute_baseline, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        T = np.array(data["translation_vector"])
+        baseline_orig, baseline_m = compute_baseline(T, obj_unit="mm")
+        return
+
     stereo_calibrate(
         Path(args.left),
         Path(args.right),
