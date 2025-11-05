@@ -201,7 +201,7 @@ def collect_image_pairs(left_folder: Path, right_folder: Path):
 
 
 def rectify_and_show(left_folder: Path, right_folder: Path,
-                     left_json: Path, right_json: Path, stereo_json: Path,
+                     left_json: Path, right_json: Path, stereo_json: Path, time: bool = False,
                      save: bool = False, alpha: float = 0.0, remap_interpolation=cv2.INTER_LINEAR):
     print_dbg("[INFO] Loading intrinsics...")
     mtxL, distL = load_intrinsics(left_json)
@@ -242,8 +242,10 @@ def rectify_and_show(left_folder: Path, right_folder: Path,
         out_right.mkdir(parents=True, exist_ok=True)
 
     # loop pairs
-    win_name = "Rectified pair (L | R). Press any key -> next, q -> quit"
-    cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
+    if not time:
+        win_name = "Rectified pair (L | R). Press any key -> next, q -> quit"
+        cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
+
     for idx, (pL, pR) in enumerate(pairs, start=1):
         imgL = load_image_unicode(pL)
         imgR = load_image_unicode(pR)
@@ -268,10 +270,11 @@ def rectify_and_show(left_folder: Path, right_folder: Path,
             y = k * step
             cv2.line(side_by_side, (0, y), (2 * w - 1, y), color, 1)
 
-        cv2.imshow(win_name, side_by_side)
-        key = cv2.waitKey(0) & 0xFF
-        if key == ord('q'):
-            break
+        if not time:
+            cv2.imshow(win_name, side_by_side)
+            key = cv2.waitKey(0) & 0xFF
+            if key == ord('q'):
+                break
 
         if save:
             outL = out_left / pL.name
@@ -302,9 +305,8 @@ def parse_args(argv):
     p.add_argument("--alpha", type=float, default=0.0, help="alpha passed to stereoRectify")
     p.add_argument("--save", action="store_true",
                    help="Save rectified images to ../rectified_left and ../rectified_right")
-    p.add_argument("--alpha", type=float, default=0.0,
-                   help="alpha parameter passed to stereoRectify (0..1; 0=crop, 1=keep all)")
     p.add_argument("--time", action="store_true", help="Measure and print processing time")
+    p.add_argument("--benchmark", action="store_true", help="Run benchmark of remap performance")
     return p.parse_args(argv)
 
 
@@ -318,6 +320,10 @@ def main(argv=None):
 
     if args.param.strip().lower() == "all":
         param_list = list(INTERPOLATIONS.keys())
+    if args.benchmark:
+        benchmark_remap(left_folder, right_folder, left_json, right_json, stereo_json,
+                        param_list, repeats=args.repeats, show=args.show, alpha=args.alpha)
+        return
     if args.time:
         interpolations = [cv2.INTER_LINEAR, cv2.INTER_NEAREST, cv2.INTER_LANCZOS4, cv2.INTER_CUBIC, cv2.INTER_AREA]
         for interp in interpolations:
@@ -326,21 +332,17 @@ def main(argv=None):
             start_time = time.time()
             rectify_and_show(
                 Path(args.left_folder), Path(args.right_folder),
-                Path(args.left_json), Path(args.right_json), Path(args.stereo_json),
+                Path(args.left_json), Path(args.right_json), Path(args.stereo_json), args.time,
                 save=False, alpha=args.alpha, remap_interpolation=interp
             )
             end_time = time.time()
             print(f"[TIME] Processing time with interpolation {interp}: {end_time - start_time:.2f} seconds")
     else:
-        param_list = [s.strip() for s in args.param.split(",")]
         rectify_and_show(
             Path(args.left_folder), Path(args.right_folder),
-            Path(args.left_json), Path(args.right_json), Path(args.stereo_json),
+            Path(args.left_json), Path(args.right_json), Path(args.stereo_json), args.time,
             save=args.save, alpha=args.alpha
         )
-
-    benchmark_remap(left_folder, right_folder, left_json, right_json, stereo_json,
-                    param_list, repeats=args.repeats, show=args.show, alpha=args.alpha)
 
 
 if __name__ == "__main__":
