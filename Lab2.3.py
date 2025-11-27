@@ -281,8 +281,15 @@ def rectify_and_show(left_folder: Path, right_folder: Path,
             outR = out_right / pR.name
             okL = imwrite_unicode(outL, rectL)
             okR = imwrite_unicode(outR, rectR)
+            # 🔹 Save also the side-by-side rectified image with horizontal lines
+            combined_name = f"{pL.stem}_rectified_with_lines.png"
+            out_combined = out_left / combined_name
+            okCombined = imwrite_unicode(out_combined, side_by_side)
+        
             print_dbg(
-                f"[SAVE] {pL.name} -> {outL} : {'OK' if okL else 'FAIL'}; {pR.name} -> {outR} : {'OK' if okR else 'FAIL'}")
+                f"[SAVE] {pL.name} -> {outL} : {'OK' if okL else 'FAIL'}; "
+                f"{pR.name} -> {outR} : {'OK' if okR else 'FAIL'}; "
+                f"Combined -> {out_combined} : {'OK' if okCombined else 'FAIL'}")
 
     cv2.destroyAllWindows()
 

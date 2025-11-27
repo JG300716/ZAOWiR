@@ -86,6 +86,14 @@ def stereo_calibrate(
     print("Macierz rotacji (R):\n", R)
     print("Wektor translacji (T):\n", T)
 
+    # === Zadanie 1.2: Współczynniki dystorsji ===
+    print("\n[INFO] Współczynniki dystorsji:")
+    print("Lewa kamera [k1, k2, p1, p2, k3]:", dist_left.ravel())
+    print("Prawa kamera [k1, k2, p1, p2, k3]:", dist_right.ravel())
+    print("\nOpis współczynników:")
+    print("  k1, k2, k3 – współczynniki dystorsji radialnej (zniekształcenie typu beczka/poduszka).")
+    print("  p1, p2 – współczynniki dystorsji tangencjalnej (powstałe przy przekrzywieniu soczewki).")
+
     if save_json:
         output_path = left_folder.parent / "stereo_calibration.json"
         data = {
@@ -94,6 +102,8 @@ def stereo_calibrate(
             "translation_vector": T.tolist(),
             "essential_matrix": E.tolist(),
             "fundamental_matrix": F.tolist(),
+            "distortion_left": dist_left.ravel().tolist(),
+            "distortion_right": dist_right.ravel().tolist(),
         }
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4)
@@ -125,21 +135,22 @@ def parse_args():
     parser.add_argument("-j", "--json", action="store_true", help="Zapisz wynik kalibracji do stereo_calibration.json.")
     parser.add_argument("--left_json", required=True, help="Plik JSON z kalibracją lewej kamery.")
     parser.add_argument("--right_json", required=True, help="Plik JSON z kalibracją prawej kamery.")
-    parser.add_argument("--compute_baseline", required=True, help="Plik JSON z kalibracją stereo kamery.")
-    
+    parser.add_argument("--compute_baseline", required=False, help="Plik JSON z kalibracją stereo kamery.")
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
 
+    # tryb obliczania baseline
     if args.compute_baseline:
         with open(args.compute_baseline, "r", encoding="utf-8") as f:
             data = json.load(f)
         T = np.array(data["translation_vector"])
-        baseline_orig, baseline_m = compute_baseline(T, obj_unit="mm")
+        compute_baseline(T, obj_unit="mm")
         return
 
+    # tryb stereo kalibracji
     stereo_calibrate(
         Path(args.left),
         Path(args.right),

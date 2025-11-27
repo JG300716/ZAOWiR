@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import json
 import os
+import math
 
 
 def load_image_unicode(path: Path):
@@ -23,11 +24,12 @@ def find_chessboard_in_folder(folder_path: Path, pattern_size, square_size):
     )
     if not image_files:
         print("[INFO] Brak obrazów w folderze.")
-        return [], [], None
+        return [], [], None, []
 
     objpoints = []
     imgpoints = []
     detected_images = []
+    used_files = []
 
     objp = np.zeros((pattern_size[1] * pattern_size[0], 3), np.float32)
     objp[:, :2] = np.mgrid[0:pattern_size[0], 0:pattern_size[1]].T.reshape(-1, 2)
@@ -49,10 +51,24 @@ def find_chessboard_in_folder(folder_path: Path, pattern_size, square_size):
             imgpoints.append(corners_subpix)
             objpoints.append(objp)
             detected_images.append(idx)
+            used_files.append(image_path.name)
 
     print("=== PODSUMOWANIE ===")
-    print("Ilosc zdjęć z wykrytą tablicą kalibracyjną: ", len(detected_images), "/", len(image_files))
-    return objpoints, imgpoints, first_gray_shape
+    print("Ilość zdjęć z wykrytą tablicą kalibracyjną:", len(detected_images), "/", len(image_files))
+    return objpoints, imgpoints, first_gray_shape, used_files
+
+
+def describe_distortion(dist):
+    """Opisuje współczynniki dystorsji"""
+    coeffs = dist.ravel().tolist()
+    names = ["k1", "k2", "p1", "p2", "k3"]
+    print("\n=== Współczynniki dystorsji ===")
+    for name, val in zip(names, coeffs):
+        print(f"{name}: {val:.6f}")
+    print("\nOpis:")
+    print("k1, k2, k3 – współczynniki dystorsji radialnej (zniekształcenie 'beczkowe' lub 'poduszkowe')")
+    print("p1, p2 – współczynniki dystorsji tangencjalnej (przesunięcie punktów spowodowane nachyleniem soczewek)")
+    return dict(zip(names, coeffs))
 
 
 def mean_error_full(objpoints, imgpoints, rvecs, tvecs, mtx, dist):
@@ -68,11 +84,14 @@ def mean_error_full(objpoints, imgpoints, rvecs, tvecs, mtx, dist):
     return mean_err
 
 
-def save_calibration_to_json(folder_path: Path, mtx, dist):
-    out_path = folder_path.parent / "calibration.json"
+def save_calibration_to_json(folder_path: Path, mtx, dist, used_files, side="camera"):
+    out_path = folder_path.parent / f"calibration_{side}.json"
     data = {
+        "camera_side": side,
         "camera_matrix": mtx.tolist(),
-        "distortion_coefficients": dist.ravel().tolist()
+        "distortion_coefficients": dist.ravel().tolist(),
+        "distortion_coefficients_named": describe_distortion(dist),
+        "used_images": used_files
     }
     with open(out_path, "w") as f:
         json.dump(data, f, indent=4)
@@ -88,85 +107,84 @@ def load_calibration_from_json(json_path: Path):
     return mtx, dist
 
 
-def undistort_images(folder_path: Path, mtx, dist):
-    output_dir = folder_path.parent / "undistort"
+def compute_fov_from_calibration(mtx, image_shape):
+    fx = mtx[0, 0]
+    fy = mtx[1, 1]
+    width, height = image_shape
+    fov_x = 2 * math.degrees(math.atan(width / (2 * fx)))
+    fov_y = 2 * math.degrees(math.atan(height / (2 * fy)))
+    print(f"[INFO] FOV poziomy: {fov_x:.2f}°, pionowy: {fov_y:.2f}°")
+    return fov_x, fov_y
+
+
+def undistort_single_images(left_path: Path, right_path: Path, mtx, dist):
+    output_dir = Path("undistorted_single")
     output_dir.mkdir(exist_ok=True)
-    for image_path in folder_path.iterdir():
-        if image_path.suffix.lower() not in (".png", ".jpg", ".jpeg", ".bmp", ".tiff"):
-            continue
-        img = load_image_unicode(image_path)
+
+    for path, name in [(left_path, "left"), (right_path, "right")]:
+        img = load_image_unicode(path)
         if img is None:
+            print(f"[ERROR] Nie udało się wczytać {path}")
             continue
         undistorted = cv2.undistort(img, mtx, dist, None)
-        out_path = output_dir / image_path.name
+        out_path = output_dir / f"{name}_undistorted.png"
         cv2.imwrite(str(out_path), undistorted)
-        success, encoded_img = cv2.imencode(".png", undistorted)
-        if success:
-            with open(out_path, "wb") as f:
-                f.write(encoded_img.tobytes())
-    print(f"[INFO] Poprawione obrazy zapisane w: {output_dir}")
-
-
-def remap_images(folder_path: Path, mtx, dist):
-    output_dir = folder_path.parent / "undistort_with_remap"
-    output_dir.mkdir(exist_ok=True)
-    sample_img = next(folder_path.iterdir())
-    img_sample = load_image_unicode(sample_img)
-    h, w = img_sample.shape[:2]
-    mapx, mapy = cv2.initUndistortRectifyMap(mtx, dist, None, mtx, (w, h), cv2.CV_32FC1)
-
-    for image_path in folder_path.iterdir():
-        if image_path.suffix.lower() not in (".png", ".jpg", ".jpeg", ".bmp", ".tiff"):
-            continue
-        #else:
-        #   print("Znaleziono plik:", image_path)
-        img = load_image_unicode(image_path)
-        if img is None:
-            print(f"[UWAGA] Nie udało się wczytać {image_path}")
-            continue
-        #else:
-        #   print(f"[OK] Udało się wczytać {image_path}")
-        undistorted = cv2.remap(img, mapx, mapy, interpolation=cv2.INTER_LINEAR)
-        out_path = output_dir / image_path.name
-        success, encoded_img = cv2.imencode(".png", undistorted)
-        if success:
-            with open(out_path, "wb") as f:
-                f.write(encoded_img.tobytes())
-        #else:
-        #   print(f"[BŁĄD] Nie udało się zakodować obrazu {out_path}")
-    print(f"[INFO] Poprawione obrazy (remap) zapisane w: {output_dir}")
+        print(f"[INFO] Zapisano wynik dla {name}: {out_path}")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Kalibracja i korekcja obrazu tablicy szachownicy.")
-    parser.add_argument("-i", "--input", required=True, help="Ścieżka do folderu z obrazami.")
+    parser.add_argument("-i", "--input", required=False, help="Ścieżka do folderu z obrazami.")
     parser.add_argument("-w", "--width", type=int, required=False, help="Liczba pól w poziomie.")
     parser.add_argument("-H", "--height", type=int, required=False, help="Liczba pól w pionie.")
     parser.add_argument("-s", "--size", type=float, required=False, help="Rozmiar 1 pola [mm].")
-    parser.add_argument("-json", "--save_json", action="store_true",
-                        help="Zapisuje wyniki kalibracji do calibration.json")
+    parser.add_argument("-json", "--save_json", action="store_true", help="Zapisuje wyniki kalibracji do calibration.json")
     parser.add_argument("-load_json", type=str, help="Ścieżka do pliku calibration.json do korekcji obrazów")
-    args = parser.parse_args()
+    parser.add_argument("-FOV", action="store_true", help="Oblicza FOV z pliku calibration.json (wymaga -load_json)")
+    parser.add_argument("--undistort_single", nargs=2, metavar=("LEFT_IMG", "RIGHT_IMG"),
+                        help="Usuwa dystorsję z pojedynczych klatek (lewa i prawa kamera)")
 
-    folder_path = Path(args.input)
+    args = parser.parse_args()
 
     if args.load_json:
         mtx, dist = load_calibration_from_json(Path(args.load_json))
-        undistort_images(folder_path, mtx, dist)
-        remap_images(folder_path, mtx, dist)
-    elif args.width and args.height and args.size:
+
+        if args.FOV:
+            folder_path = Path(args.input) if args.input else Path(".")
+            # Filtruj tylko pliki graficzne
+            image_files = [f for f in folder_path.iterdir() if f.suffix.lower() in [".jpg", ".png", ".jpeg", ".bmp", ".tiff"]]
+        
+            if not image_files:
+                print("[ERROR] Nie znaleziono żadnych plików graficznych w folderze:", folder_path)
+            else:
+                sample_img = image_files[0]
+                img = load_image_unicode(sample_img)
+                if img is not None:
+                    h, w = img.shape[:2]
+                    compute_fov_from_calibration(mtx, (w, h))
+                else:
+                    print("[ERROR] Nie udało się wczytać próbki obrazu do obliczenia FOV:", sample_img)
+
+        if args.undistort_single:
+            left, right = args.undistort_single
+            undistort_single_images(Path(left), Path(right), mtx, dist)
+
+    elif args.width and args.height and args.size and args.input:
+        folder_path = Path(args.input)
         pattern_size = (args.width, args.height)
         square_size = args.size
-        objpoints, imgpoints, gray_shape = find_chessboard_in_folder(folder_path, pattern_size, square_size)
+        objpoints, imgpoints, gray_shape, used_files = find_chessboard_in_folder(folder_path, pattern_size, square_size)
         if objpoints and imgpoints:
             ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray_shape, None, None)
             print("Camera matrix:\n", mtx)
             print("Distortion coefficients:\n", dist.ravel())
             mean_error_full(objpoints, imgpoints, rvecs, tvecs, mtx, dist)
             if args.save_json:
-                save_calibration_to_json(folder_path, mtx, dist)
+                # Ustal stronę kamery na podstawie nazwy folderu
+                side = "left" if "left" in folder_path.name.lower() else "right"
+                save_calibration_to_json(folder_path, mtx, dist, used_files, side)
     else:
-        print("[ERROR] Podaj albo parametry kalibracji (width, height, size) albo plik JSON (-load_json)")
+        print("[ERROR] Niepoprawne argumenty. Podaj dane kalibracji lub plik JSON.")
 
 
 if __name__ == "__main__":
