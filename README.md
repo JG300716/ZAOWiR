@@ -204,10 +204,73 @@ output/
   ├── rectified/         # Rektyfikowane pary obrazów
   └── disparity/         # Mapy dysparacji
 ```
+---
+## 🎥 Lab 3 - Stereo Vision
+### 🖥️ Generowanie mapy dysparycji
+
+Narzędzie pozwala generować mapy dysparycji metodami **BM**, **SGBM** oraz **CUSTOM**, a także porównywać wygenerowane mapy z referencyjną mapą GT oraz wizualizować błędy za pomocą kolorowych map cieplnych.
 
 ---
 
-## 🤝 Wymagania
+### 🎛️ Parametry
+
+| Parametr | Opis |
+|----------|------|
+| `--method` | Wybór metody dysparycji: `BM`, `SGBM`, `CUSTOM` |
+| `--block_size` | Rozmiar bloku dopasowania (wartość parzysta jest automatycznie poprawiana do nieparzystej) |
+| `--num_disparities` | Liczba dysparycji (zaokrąglana do wielokrotności 16) |
+| `--left_image` | Obraz z lewej kamery |
+| `--right_image` | Obraz z prawej kamery |
+| `--save` | Zapisuje obliczoną mapę dysparycji do pliku PNG |
+| `--compare` | Aktywuje tryb porównania map dysparycji |
+| `--path` | Folder zawierający pliki `*_disparity.png` wygenerowane wcześniej |
+| `--ref_path` | Ścieżka do referencyjnej mapy GT (skalowanej ×4, 0 = brak danych) |
+
+---
+
+
+
+### 📊 Porównywanie map dysparycji z ground truth
+
+Funkcja porównująca mapy dysparycji automatycznie:
+
+- wczytuje wszystkie pliki `*_disparity.png` z podanego folderu,
+- ładuje i skaluje mapę referencyjną GT (zakodowaną ×4, 0 = brak danych),
+- oblicza metryki jakości:
+    - **MAE** – średni błąd bezwzględny,
+    - **RMSE** – pierwiastek z błędu średniokwadratowego,
+    - **Bad pixels** – procent pikseli, gdzie błąd > 1.0 px,
+- generuje kolorową mapę błędów (JET colormap),
+- zapisuje wyniki w formie: `*_error.png`.
+
+#### Parametry:
+| Parametr | Opis |
+|----------|------|
+| `--compare` | Aktywuje tryb porównania map dysparycji |
+| `--path` | Folder zawierający pliki `*_disparity.png` |
+| `--ref_path` | Mapa referencyjna GT zakodowana ×4 |
+
+---
+#### Przykład:
+Oblicza mapę dysparycji za pomocą wybranego algorytmu i opcjonalnie zapisuje ją do pliku.
+```bash
+python main.py 
+  --method SGBM 
+  --left_image data/left.png 
+  --right_image data/right.png 
+  --save
+```
+Następnie porównuje wszystkie zapisane mapy dysparycji w katalogu `results/` z referencyjną mapą GT.
+```bash
+python main.py \
+  --compare \
+  --path results/ \
+  --ref_path GT/disp_gt.png
+```
+
+---
+
+# 🤝 Wymagania
 
 - Python 3.7+
 - OpenCV (cv2)
