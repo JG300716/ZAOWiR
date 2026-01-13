@@ -15,7 +15,7 @@ python main.py -h
 
 ## 🔬 Lab 1 - Camera Calibration
 
-### 📝 Tworzenie pliku kalibracyjnego
+### 📝 Kalibracja Kamer
 
 Generuje plik `calibration.json` na podstawie zdjęć szachownicy kalibracyjnej.
 
@@ -63,7 +63,7 @@ python main.py \
 
 ## 🎥 Lab 2 - Stereo Vision
 
-### 🔧 Tworzenie kalibracji stereo
+### 🔧 Kalibracja systemu kamer stereo
 
 Generuje kalibrację dla pary kamer stereo wraz z obliczeniem linii bazowej (baseline).
 
@@ -206,7 +206,7 @@ output/
 ```
 ---
 ## 🎥 Lab 3 - Stereo Vision
-### 🖥️ Generowanie mapy dysparycji
+### 🖥️ Odtwarzanie trójwymiarowej sceny na podstawie wielu perspektyw
 
 Narzędzie pozwala generować mapy dysparycji metodami **BM**, **SGBM** oraz **CUSTOM**, a także porównywać wygenerowane mapy z referencyjną mapą GT oraz wizualizować błędy za pomocą kolorowych map cieplnych.
 
@@ -267,6 +267,164 @@ python main.py \
   --path results/ \
   --ref_path GT/disp_gt.png
 ```
+
+---
+## 🎥 Lab 4
+### 🖥️ Mapy głębi i chmury punktów
+
+---
+
+---
+## 🎥 Lab 5
+### 🖥️ Przepływ optyczny
+
+---
+
+## 📖 Opis
+
+Aplikacja do analizy przepływu optycznego implementująca metody Lucas-Kanade (rzadki przepływ) i Farneback (gęsty przepływ). Umożliwia wykrywanie i śledzenie ruchomych obiektów w sekwencjach wideo oraz analizę w czasie rzeczywistym z kamery.
+
+---
+
+## 🚀 Użycie
+
+```bash
+# Zadanie 1 - Rzadki przepływ optyczny (Lucas-Kanade)
+python optical_flow_app.py --task sparse --input video.mp4
+
+# Zadanie 2 - Gęsty przepływ optyczny (Farneback)
+python optical_flow_app.py --task dense --input video.mp4
+
+# Zadanie 3 - Detekcja ruchomych obiektów
+python optical_flow_app.py --task detect --input video.mp4
+
+# Zadanie 4 - Analiza w czasie rzeczywistym z kamery
+python optical_flow_app.py --task realtime --camera 0
+```
+
+---
+
+## ⚙️ Parametry
+
+### Podstawowe
+
+| Parametr | Typ | Opis | Domyślnie |
+|----------|-----|------|-----------|
+| `--task` | string | Rodzaj zadania: `sparse`, `dense`, `detect`, `realtime` | **wymagany** |
+| `--input` | string | Ścieżka do pliku wideo (zadania 1-3) | - |
+| `--output` | string | Ścieżka do zapisu wyniku | - |
+| `--camera` | int | ID kamery (zadanie 4) | `0` |
+
+### Detekcja ruchu
+
+| Parametr | Typ | Opis | Domyślnie |
+|----------|-----|------|-----------|
+| `--threshold` | float | Próg prędkości do detekcji ruchu | `2.0` |
+| `--min-area` | int | Minimalny obszar obiektu [px²] | `500` |
+| `--min-speed` | float | Minimalna prędkość obiektu | `0` |
+| `--max-speed` | float | Maksymalna prędkość obiektu | `100` |
+
+### Filtry
+
+| Parametr | Wartości | Opis |
+|----------|----------|------|
+| `--filter` | `all` | Wszystkie obiekty |
+| | `horizontal` | Tylko ruch poziomy |
+| | `vertical` | Tylko ruch pionowy |
+| | `fast` | Szybkie obiekty (>5 px/frame) |
+| | `slow` | Wolne obiekty (1-5 px/frame) |
+
+---
+
+## 🎮 Sterowanie
+
+### Filter Sparse
+- `ESC` - zakończenie
+- `r` - reset punktów śledzenia
+
+### Filter (Dense)
+- `ESC` - zakończenie
+- `s` - zapis bieżącej klatki
+
+### Filter (Detect)
+- `ESC` - zakończenie
+
+### Filter (Realtime)
+- `ESC` - zakończenie
+- `h` - filtr poziomy
+- `v` - filtr pionowy
+- `f` - tylko szybkie obiekty
+- `s` - tylko wolne obiekty
+- `a` - wszystkie obiekty
+- `+` / `=` - zwiększ próg
+- `-` / `_` - zmniejsz próg
+
+---
+
+## 📊 Przykłady
+
+### Z zapisem wyniku
+```bash
+python optical_flow_app.py --task sparse --input video.mp4 --output result.mp4
+```
+
+### Detekcja z dostosowanymi parametrami
+```bash
+python optical_flow_app.py --task detect --input video.mp4 \
+    --threshold 3.0 --min-area 1000
+```
+
+### Monitoring ruchu poziomego
+```bash
+python optical_flow_app.py --task realtime --filter horizontal \
+    --min-speed 3.0
+```
+
+### Wykrywanie szybkich obiektów
+```bash
+python optical_flow_app.py --task realtime --filter fast \
+    --threshold 5.0 --min-area 1500
+```
+---
+
+## 📈 Wyświetlane informacje
+
+- Numer klatki
+- Liczba punktów / średni przepływ
+- Kierunek ruchu (N, NE, E, SE, S, SW, W, NW)
+- Prędkość [px/frame]
+- **FPS** - klatki na sekundę
+- **Time** - czas przetwarzania [ms]
+- **Objects** - liczba wykrytych obiektów
+- **Filter** - aktywny filtr
+- **Threshold** - próg detekcji
+
+---
+
+## 🛠️ Dostrajanie wydajności
+
+### Wysoka czułość (więcej detekcji)
+```bash
+--threshold 1.5 --min-area 300
+```
+
+### Niska czułość (mniej fałszywych detekcji)
+```bash
+--threshold 4.0 --min-area 1500
+```
+
+### Optymalizacja szybkości
+```bash
+--threshold 3.0 --min-area 1000 --filter horizontal
+```
+
+---
+
+## 🔍 Algorytmy
+
+- **Lucas-Kanade** - lokalna metoda różniczkowa dla rzadkiego przepływu
+- **Farneback** - metoda bazująca na aproksymacji wielomianowej dla gęstego przepływu
+- **Shi-Tomasi** - detekcja punktów charakterystycznych (narożników)
 
 ---
 
